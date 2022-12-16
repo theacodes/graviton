@@ -212,3 +212,25 @@ test "Phason GetFeederInfo req/resp" {
     var decoded = c.PhasonGetFeederInfoResponse_from_datagram(&dg).*;
     try testing.expect(std.meta.eql(resp, decoded));
 }
+
+fn unpack_i32(bytes: []u8) i32 {
+    return @ptrCast(*align(1) i32, bytes).*;
+}
+
+test "Phason StartFeed req/resp" {
+    var req = c.struct_PhasonStartFeedRequest{
+        .command = c.PHASON_START_FEED_REQ,
+        .sequence = 1,
+        .micrometers = -42,
+        .padding = undefined,
+    };
+
+    var dg = c.PhasonRequest_to_datagram(0x42, &req);
+    try testing.expect(c.GravitonDatagram_check_crc8(&dg));
+    try testing.expect(dg.src == 0x00);
+    try testing.expect(dg.dst == 0x42);
+    try testing.expect(dg.protocol == c.PHASON_PROTOCOL_ID);
+    try testing.expect(dg.payload[0] == c.PHASON_START_FEED_REQ);
+    try testing.expect(dg.payload[1] == 1);
+    try testing.expectEqual(unpack_i32(dg.payload[2..6]), -42);
+}
