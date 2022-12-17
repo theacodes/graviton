@@ -80,16 +80,23 @@ inline static bool GravitonDatagram_check_crc8(struct GravitonDatagram* datagram
     return original_crc8 == calculated_crc8;
 }
 
-enum GravitonSerialReadResult {
-    // Indicates that there aren't any bytes ready to be read, so
-    // the reader should retry.
-    GRAVITON_SERIAL_READ_RETRY = -1,
-    // Indicates that either an error or a timeout has occurred, so
-    // the reader should give up.
-    GRAVITON_SERIAL_READ_ABORT = -2,
-};
+/* Returns a pointer to the datagram's byte representation. */
+inline static uint8_t* GravitonDatagram_as_bytes(struct GravitonDatagram* datagram) { return (uint8_t*)(datagram); }
 
-/*  Serial read function type
+/* Constructs a datagram from its byte representation. Bytes must be at least 32 bytes long */
+inline static struct GravitonDatagram GravitonDatagram_from_bytes(uint8_t* bytes) {
+    struct GravitonDatagram datagram;
+    memcpy(GravitonDatagram_as_bytes(&datagram), bytes, GRAVITON_DATAGRAM_SIZE);
+    return datagram;
+}
+
+/*  Stream I/O
+
+    These are adapters for using the GravitonDatagram_read_from_stream and
+    GravitonDatagram_write_to_stream helper functions. It's not required
+    to use these helpers, as you can manually deal with reading and writing
+    from whatever I/O using GravitonDatagram_as_bytes() and
+    GravitonDatagram_from_bytes().
 
     This is used by GravitonDatagram_read to read bytes from a serial driver.
     This function should either return a single byte from the serial port,
@@ -102,9 +109,53 @@ enum GravitonSerialReadResult {
     The void* argument is passed through from GravitonDatagram_read and can be
     used to store any relevant caller-defined state.
 */
-typedef int32_t (*graviton_serial_read_func)(void*);
 
-enum GravitonReadResult {
+enum GravitonIOResult {
+    // Indicates that there aren't any bytes ready to be read, so
+    // the reader should retry.
+    GRAVITON_IO_RETRY = -1,
+    // Indicates that either an error or a timeout has occurred, so
+    // the reader should give up.
+    GRAVITON_IO_ABORT = -2,
+};
+
+struct GravitonIO {
+    /*  Stream read. Should return a single byte from the stream,
+        GRAVITON_IO_RETRY, or GRAVITON_IO_ABORT. */
+    int32_t (*read)(struct GravitonIO*);
+    /*  Stream write. */
+    int32_t (*write)(struct GravitonIO*, uint8_t* data, size_t len);
+    /*  User-provided context */
+    void* context;
+};
+
+inline static int32_t GravitonIO_read_byte(struct GravitonIO* io) {
+    while (true) {
+        int result = io->read(io);
+        if (result == GRAVITON_IO_RETRY) {
+            continue;
+        } else {
+            return result;
+        }
+    }
+}
+
+inline static int32_t GravitonIO_read_until_byte(struct GravitonIO* io, uint8_t marker) {
+    while (true) {
+        int result = io->read(io);
+        if (result == marker) {
+            return result;
+        } else if (result == GRAVITON_IO_RETRY) {
+            continue;
+        } else if (result < 0) {
+            return result;
+        } else {
+            continue;
+        }
+    }
+}
+
+enum GravitonDatagramReadResult {
     GRAVITON_READ_OK = 0,
     GRAVITON_READ_NO_START_BYTE = -1,
     GRAVITON_READ_NO_END_BYTE = -2,
@@ -113,50 +164,32 @@ enum GravitonReadResult {
     GRAVITON_READ_UNKNOWN = -5,
 };
 
-#define __GRAVITON_READ_STREAM()                                                                                       \
-    while (true) {                                                                                                     \
-        int result = read(read_context);                                                                               \
-        if (result >= 0) {                                                                                             \
-            byte = result;                                                                                             \
-            break;                                                                                                     \
-        } else if (result == GRAVITON_SERIAL_READ_ABORT) {                                                             \
-            return GRAVITON_READ_ABORTED;                                                                              \
-        } else if (result == GRAVITON_SERIAL_READ_RETRY) {                                                             \
-            continue;                                                                                                  \
-        } else {                                                                                                       \
-            return GRAVITON_READ_UNKNOWN;                                                                              \
-        }                                                                                                              \
-    }
-
 /*  Reads a datagram out of a stream.
 
-    read is called repeatedly to fetch bytes from the stream. See graviton_serial_read_func above for more details.
-
-    Returns GRAVITON_READ_OK if a valid dataframe was read from the stream. Returns GRAVITON_READ_NO_START_BYTE or
-    GRAVITON_READ_NO_END_BYTE if the dataframe wasn't detected at all. Returns GRAVITON_READ_BAD_CRC8 if a dataframe
-    was found but had an invalid checksum. Returns GRAVITON_READ_ABORTED if read() returned GRAVITON_SERIAL_READ_ABORT
-    while reading bytes from the stream. Returns GRAVITON_READ_UNKNOWN under all other circumstances.
-
-    This will read at most 32 bytes from the stream. It does not do any lookahead and will not put "unconsumed" bytes
-    back into any upstream read buffers.
+    Returns GRAVITON_READ_OK if a valid dataframe was read from the stream.
+    Returns GRAVITON_READ_NO_START_BYTE or GRAVITON_READ_NO_END_BYTE if the
+    dataframe wasn't detected at all. Returns GRAVITON_READ_BAD_CRC8 if a
+    dataframe was found but had an invalid checksum. Returns
+    GRAVITON_READ_ABORTED if io->read() returned GRAVITON_IO_ABORT while
+    reading bytes from the stream. Returns GRAVITON_READ_UNKNOWN under all
+    other circumstances.
 */
-inline static enum GravitonReadResult
-GravitonDatagram_read(struct GravitonDatagram* datagram, graviton_serial_read_func read, void* read_context) {
-    uint8_t byte;
-
-    __GRAVITON_READ_STREAM();
-
-    // Check for start byte
-    if (byte != 0x55) {
+inline static enum GravitonDatagramReadResult
+GravitonDatagram_read_from_stream(struct GravitonDatagram* datagram, struct GravitonIO* io) {
+    if (GravitonIO_read_until_byte(io, 0x55) < 0) {
         return GRAVITON_READ_NO_START_BYTE;
     }
-    datagram->start = byte;
+
+    datagram->start = 0x55;
 
     // Read remaining 31 datagram bytes.
     uint8_t* datagram_bytes = (uint8_t*)(datagram);
-    for (size_t i = 1; i < sizeof(struct GravitonDatagram); i++) {
-        __GRAVITON_READ_STREAM();
-        datagram_bytes[i] = byte;
+    for (size_t i = 1; i < GRAVITON_DATAGRAM_SIZE; i++) {
+        int32_t byte = GravitonIO_read_byte(io);
+        if (byte < 0) {
+            return byte == GRAVITON_IO_ABORT ? GRAVITON_READ_ABORTED : GRAVITON_READ_UNKNOWN;
+        }
+        datagram_bytes[i] = (uint8_t)(byte);
     }
 
     // Check for end byte
@@ -172,12 +205,8 @@ GravitonDatagram_read(struct GravitonDatagram* datagram, graviton_serial_read_fu
     return GRAVITON_READ_OK;
 }
 
-/* Returns a pointer to the datagram's byte representation. */
-inline static uint8_t* GravitonDatagram_as_bytes(struct GravitonDatagram* datagram) { return (uint8_t*)(datagram); }
-
 #undef __GRAVITON_READ_STREAM
 
 #ifdef __cplusplus
-extern "C"
 }
 #endif

@@ -49,11 +49,21 @@ test "GravitonDatagram crc8 set and check" {
 var stream_data: [40]i32 = undefined;
 var stream_index: usize = 0;
 
-fn stream_read(_: ?*anyopaque) callconv(.C) i32 {
+fn stream_read(_: [*c]c.GravitonIO) callconv(.C) i32 {
+    if (stream_index >= stream_data.len) {
+        return -2;
+    }
+
     var data = stream_data[stream_index];
     stream_index += 1;
     return data;
 }
+
+var stream_io = c.GravitonIO{
+    .read = &stream_read,
+    .write = undefined,
+    .context = undefined,
+};
 
 test "GravitonDatagram read from stream (success)" {
     stream_index = 0;
@@ -66,7 +76,7 @@ test "GravitonDatagram read from stream (success)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
     try testing.expect(result == c.GRAVITON_READ_OK);
     try testing.expect(dg.start == 0x55);
@@ -88,7 +98,7 @@ test "GravitonDatagram read from stream (no start byte)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
     try testing.expect(result == c.GRAVITON_READ_NO_START_BYTE);
 }
@@ -104,7 +114,7 @@ test "GravitonDatagram read from stream (no end byte)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
     try testing.expect(result == c.GRAVITON_READ_NO_END_BYTE);
 }
@@ -120,7 +130,7 @@ test "GravitonDatagram read from stream (bad crc8)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
     try testing.expect(result == c.GRAVITON_READ_BAD_CRC8);
 }
@@ -135,7 +145,7 @@ test "GravitonDatagram read from stream (success, but with retries)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
     try testing.expect(result == c.GRAVITON_READ_OK);
     try testing.expect(dg.start == 0x55);
@@ -157,9 +167,9 @@ test "GravitonDatagram read from stream (abort)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
-    try testing.expect(result == c.GRAVITON_READ_ABORTED);
+    try testing.expectEqual(result, c.GRAVITON_READ_ABORTED);
 }
 
 test "GravitonDatagram read from stream (unknown error)" {
@@ -173,9 +183,9 @@ test "GravitonDatagram read from stream (unknown error)" {
     };
 
     var dg: GravitonDatagram = undefined;
-    var result = c.GravitonDatagram_read(&dg, &stream_read, undefined);
+    var result = c.GravitonDatagram_read_from_stream(&dg, &stream_io);
 
-    try testing.expect(result == c.GRAVITON_READ_UNKNOWN);
+    try testing.expectEqual(result, c.GRAVITON_READ_UNKNOWN);
 }
 
 test "Phason GetFeederInfo req/resp" {
