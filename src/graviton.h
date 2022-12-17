@@ -162,6 +162,7 @@ enum GravitonDatagramReadResult {
     GRAVITON_READ_BAD_CRC8 = -3,
     GRAVITON_READ_ABORTED = -4,
     GRAVITON_READ_UNKNOWN = -5,
+    GRAVITON_READ_REQUEST_FAILED = -6,
 };
 
 /*  Reads a datagram out of a stream.
@@ -203,6 +204,10 @@ GravitonDatagram_read_from_stream(struct GravitonDatagram* datagram, struct Grav
     };
 
     return GRAVITON_READ_OK;
+}
+
+inline static int32_t GravitonDatagram_write_to_stream(struct GravitonDatagram* datagram, struct GravitonIO* io) {
+    return io->write(io, GravitonDatagram_as_bytes(datagram), 32);
 }
 
 #undef __GRAVITON_READ_STREAM

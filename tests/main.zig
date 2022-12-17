@@ -46,28 +46,52 @@ test "GravitonDatagram crc8 set and check" {
     try testing.expect(c.GravitonDatagram_check_crc8(&dg));
 }
 
-var stream_data: [40]i32 = undefined;
-var stream_index: usize = 0;
+var stream_read_data: [40]i32 = undefined;
+var stream_read_index: usize = 0;
+var stream_write_data: [40]u8 = undefined;
+var stream_write_index: usize = 0;
 
 fn stream_read(_: [*c]c.GravitonIO) callconv(.C) i32 {
-    if (stream_index >= stream_data.len) {
+    if (stream_read_index >= stream_read_data.len) {
         return -2;
     }
 
-    var data = stream_data[stream_index];
-    stream_index += 1;
+    var data = stream_read_data[stream_read_index];
+    stream_read_index += 1;
     return data;
+}
+
+fn stream_write(_: [*c]c.GravitonIO, data: [*c]u8, len: usize) callconv(.C) i32 {
+    if (stream_write_index + len >= stream_write_data.len) {
+        return -2;
+    }
+
+    var i: usize = 0;
+    while (i < len) {
+        stream_write_data[stream_write_index] = data[i];
+        stream_write_index += 1;
+        i += 1;
+    }
+
+    return @intCast(i32, len);
+}
+
+fn stream_reset() void {
+    std.mem.set(i32, &stream_read_data, 0);
+    std.mem.set(u8, &stream_write_data, 0);
+    stream_read_index = 0;
+    stream_write_index = 0;
 }
 
 var stream_io = c.GravitonIO{
     .read = &stream_read,
-    .write = undefined,
+    .write = &stream_write,
     .context = undefined,
 };
 
 test "GravitonDatagram read from stream (success)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x55, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -88,8 +112,8 @@ test "GravitonDatagram read from stream (success)" {
 }
 
 test "GravitonDatagram read from stream (no start byte)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x00, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -104,8 +128,8 @@ test "GravitonDatagram read from stream (no start byte)" {
 }
 
 test "GravitonDatagram read from stream (no end byte)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x55, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -120,8 +144,8 @@ test "GravitonDatagram read from stream (no end byte)" {
 }
 
 test "GravitonDatagram read from stream (bad crc8)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x55, 0x01, 0x02, 0x03, 0x0A, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -136,8 +160,8 @@ test "GravitonDatagram read from stream (bad crc8)" {
 }
 
 test "GravitonDatagram read from stream (success, but with retries)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         -1,   0x55, 0x01, -1,   0x02, 0x03, -1,   0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, -1,   -1,   0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, -1,   0x00, 0x00, 0x00, 0x00, 0x00, -1,   0x00, 0x00,
@@ -157,8 +181,8 @@ test "GravitonDatagram read from stream (success, but with retries)" {
 }
 
 test "GravitonDatagram read from stream (abort)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x55, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, -2,   0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -173,8 +197,8 @@ test "GravitonDatagram read from stream (abort)" {
 }
 
 test "GravitonDatagram read from stream (unknown error)" {
-    stream_index = 0;
-    stream_data = [_]i32{
+    stream_reset();
+    stream_read_data = [_]i32{
         0x55, 0x01, 0x02, 0x03, 0x04, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, -3,   0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -188,7 +212,7 @@ test "GravitonDatagram read from stream (unknown error)" {
     try testing.expectEqual(result, c.GRAVITON_READ_UNKNOWN);
 }
 
-test "Phason GetFeederInfo req/resp" {
+test "Phason to/from datagram" {
     var req = c.struct_PhasonRequest{
         .command = c.PHASON_GET_FEEDER_INFO_REQ,
         .data = undefined,
@@ -227,7 +251,7 @@ fn unpack_i32(bytes: []u8) i32 {
     return @ptrCast(*align(1) i32, bytes).*;
 }
 
-test "Phason StartFeed req/resp" {
+test "Phason StartFeedRequest to datagram" {
     var req = c.struct_PhasonStartFeedRequest{
         .command = c.PHASON_START_FEED_REQ,
         .sequence = 1,
@@ -243,4 +267,71 @@ test "Phason StartFeed req/resp" {
     try testing.expect(dg.payload[0] == c.PHASON_START_FEED_REQ);
     try testing.expect(dg.payload[1] == 1);
     try testing.expectEqual(unpack_i32(dg.payload[2..6]), -42);
+}
+
+test "Phason send request" {
+    stream_reset();
+
+    var req = c.struct_PhasonStartFeedRequest{
+        .command = c.PHASON_START_FEED_REQ,
+        .sequence = 42,
+        .micrometers = 52,
+        .padding = undefined,
+    };
+
+    var resp = c.struct_PhasonStartFeedResponse{
+        .command = c.PHASON_START_FEED_RESP,
+        .status = c.PHASON_OK,
+        .sequence = 42,
+        .padding = undefined,
+    };
+
+    var resp_dg = c.PhasonResponse_to_datagram(0x42, &resp);
+    for (c.GravitonDatagram_as_bytes(&resp_dg)[0..32]) |b, i| {
+        stream_read_data[i] = b;
+    }
+
+    var actual_resp_dg: GravitonDatagram = undefined;
+    var result = c.phason_send_request(&stream_io, 0x42, @ptrCast(*c.struct_PhasonRequest, &req), &actual_resp_dg);
+
+    try testing.expectEqual(result, c.GRAVITON_READ_OK);
+
+    // Check the request data written
+    var req_dg = c.GravitonDatagram_from_bytes(&stream_write_data);
+    try testing.expect(c.GravitonDatagram_check_crc8(&req_dg));
+    try testing.expect(req_dg.src == 0x00);
+    try testing.expect(req_dg.dst == 0x42);
+    try testing.expect(req_dg.protocol == c.PHASON_PROTOCOL_ID);
+    try testing.expect(req_dg.payload[0] == c.PHASON_START_FEED_REQ);
+    try testing.expect(req_dg.payload[1] == 42);
+    try testing.expectEqual(unpack_i32(req_dg.payload[2..6]), 52);
+
+    // Check the decoded response data
+    var actual_resp = c.PhasonStartFeedResponse_from_datagram(&actual_resp_dg).*;
+    try testing.expectEqual(actual_resp.command, c.PHASON_START_FEED_RESP);
+    try testing.expectEqual(actual_resp.status, c.PHASON_OK);
+    try testing.expectEqual(actual_resp.sequence, 42);
+}
+
+test "Phason send response" {
+    stream_reset();
+    var resp = c.struct_PhasonStartFeedResponse{
+        .command = c.PHASON_START_FEED_RESP,
+        .status = c.PHASON_OK,
+        .sequence = 42,
+        .padding = undefined,
+    };
+
+    var result = c.phason_send_response(&stream_io, 0x42, @ptrCast(*c.struct_PhasonResponse, &resp));
+
+    try testing.expect(result >= 0);
+
+    var resp_dg = c.GravitonDatagram_from_bytes(&stream_write_data);
+    try testing.expect(c.GravitonDatagram_check_crc8(&resp_dg));
+    try testing.expect(resp_dg.src == 0x42);
+    try testing.expect(resp_dg.dst == 0x00);
+    try testing.expect(resp_dg.protocol == c.PHASON_PROTOCOL_ID);
+    try testing.expect(resp_dg.payload[0] == c.PHASON_START_FEED_RESP);
+    try testing.expect(resp_dg.payload[1] == c.PHASON_OK);
+    try testing.expect(resp_dg.payload[2] == 42);
 }

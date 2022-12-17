@@ -17,14 +17,22 @@ extern "C" {
 #include <stdint.h>
 #include <string.h>
 
+/*
+    Macros and constants
+*/
+
 #define PHASON_PROTOCOL_ID 0xA1
 #define PHASON_CONTROLLER_ADDRESS 0x00
 #define PHASON_MAX_FEEDER_ADDRESS 0x80
 #define PHASON_LOGICAL_ADDRESS 0xFF
 #define PHASON_UID_SIZE 12
 
-#define PHASON_ASSERT_PAYLOAD_SIZE(typename)                                                                           \
+#define __PHASON_ASSERT_PAYLOAD_SIZE(typename)                                                                         \
     static_assert(sizeof(typename) == GRAVITON_PAYLOAD_SIZE, #typename "must be fit in Graviton datagram payload");
+
+/*
+    Base Request and Response definitions
+*/
 
 enum PhasonStatusCode {
     // All is good. :)
@@ -44,7 +52,7 @@ struct PhasonRequest {
     uint8_t data[25];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonRequest);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonRequest);
 
 struct PhasonResponse {
     uint8_t command;  // MSB always set.
@@ -52,7 +60,14 @@ struct PhasonResponse {
     uint8_t data[24];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonResponse);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonResponse);
+
+#define __PHASON_FROM_DATAGRAM(typename)                                                                               \
+    inline static struct typename* typename##_from_datagram(struct GravitonDatagram* datagram) {                       \
+        return ((struct typename*)(datagram->payload));                                                                \
+    }
+
+__PHASON_FROM_DATAGRAM(PhasonRequest);
 
 inline static struct GravitonDatagram PhasonRequest_to_datagram(uint8_t feeder_addr, void* req) {
     struct GravitonDatagram datagram;
@@ -62,6 +77,8 @@ inline static struct GravitonDatagram PhasonRequest_to_datagram(uint8_t feeder_a
     return datagram;
 }
 
+__PHASON_FROM_DATAGRAM(PhasonResponse);
+
 inline static struct GravitonDatagram PhasonResponse_to_datagram(uint8_t feeder_addr, void* resp) {
     struct GravitonDatagram datagram;
     GravitonDatagram_init(&datagram, feeder_addr, PHASON_CONTROLLER_ADDRESS, PHASON_PROTOCOL_ID);
@@ -70,10 +87,9 @@ inline static struct GravitonDatagram PhasonResponse_to_datagram(uint8_t feeder_
     return datagram;
 }
 
-#define __PHASON_FROM_DATAGRAM(response_type)                                                                          \
-    inline static struct response_type* response_type##_from_datagram(struct GravitonDatagram* datagram) {             \
-        return ((struct response_type*)(datagram->payload));                                                           \
-    }
+/*
+    Command specific request and response definitions
+*/
 
 enum PhasonCommands {
     PHASON_GET_FEEDER_INFO_REQ = 0x01,
@@ -99,7 +115,7 @@ struct PhasonGetFeederInfoResponse {
     uint8_t padding[8];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonGetFeederInfoResponse);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonGetFeederInfoResponse);
 __PHASON_FROM_DATAGRAM(PhasonGetFeederInfoResponse);
 
 struct PhasonStartFeedRequest {
@@ -109,7 +125,7 @@ struct PhasonStartFeedRequest {
     uint8_t padding[20];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonStartFeedRequest);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonStartFeedRequest);
 
 struct PhasonStartFeedResponse {
     uint8_t command;  // Always 0x83
@@ -118,7 +134,7 @@ struct PhasonStartFeedResponse {
     uint8_t padding[23];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonStartFeedResponse);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonStartFeedResponse);
 __PHASON_FROM_DATAGRAM(PhasonStartFeedResponse);
 
 struct PhasonFeedStatusRequest {
@@ -127,7 +143,7 @@ struct PhasonFeedStatusRequest {
     uint8_t padding[24];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeedStatusRequest);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeedStatusRequest);
 
 struct PhasonFeedStatusResponse {
     uint8_t command;  // Always 0x84
@@ -137,7 +153,7 @@ struct PhasonFeedStatusResponse {
     uint8_t padding[19];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeedStatusResponse);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeedStatusResponse);
 __PHASON_FROM_DATAGRAM(PhasonFeedStatusResponse);
 
 struct PhasonQueryByUIDRequest {
@@ -146,7 +162,27 @@ struct PhasonQueryByUIDRequest {
     uint8_t padding[13];
 } __attribute__((packed));
 
-PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonQueryByUIDRequest);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonQueryByUIDRequest);
+
+/*
+    Helpers for communications
+*/
+
+/* Send a request and read a reply */
+inline static enum GravitonDatagramReadResult phason_send_request(
+    struct GravitonIO* io, uint8_t feeder_addr, struct PhasonRequest* req, struct GravitonDatagram* resp) {
+    struct GravitonDatagram request_datagram = PhasonRequest_to_datagram(feeder_addr, req);
+    if (GravitonDatagram_write_to_stream(&request_datagram, io) < 0) {
+        return GRAVITON_READ_REQUEST_FAILED;
+    };
+    return GravitonDatagram_read_from_stream(resp, io);
+}
+
+/* Send a response */
+inline static int32_t phason_send_response(struct GravitonIO* io, uint8_t feeder_addr, struct PhasonResponse* resp) {
+    struct GravitonDatagram response_datagram = PhasonResponse_to_datagram(feeder_addr, resp);
+    return GravitonDatagram_write_to_stream(&response_datagram, io);
+}
 
 #ifdef __cplusplus
 }
