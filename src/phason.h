@@ -149,6 +149,5 @@ struct PhasonQueryByUIDRequest {
 PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonQueryByUIDRequest);
 
 #ifdef __cplusplus
-extern "C"
 }
 #endif
