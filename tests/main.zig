@@ -214,7 +214,7 @@ test "GravitonDatagram read from stream (unknown error)" {
 
 test "Phason to/from datagram" {
     var req = c.struct_PhasonRequest{
-        .command = c.PHASON_GET_FEEDER_INFO_REQ,
+        .command = c.PHASON_FEEDER_INFO_REQ,
         .data = undefined,
     };
 
@@ -223,10 +223,10 @@ test "Phason to/from datagram" {
     try testing.expect(dg.src == 0x00);
     try testing.expect(dg.dst == 0x42);
     try testing.expect(dg.protocol == c.PHASON_PROTOCOL_ID);
-    try testing.expect(dg.payload[0] == c.PHASON_GET_FEEDER_INFO_REQ);
+    try testing.expect(dg.payload[0] == c.PHASON_FEEDER_INFO_REQ);
 
-    var resp = c.struct_PhasonGetFeederInfoResponse{
-        .command = c.PHASON_GET_FEEDER_INFO_RESP,
+    var resp = c.struct_PhasonFeederInfoResponse{
+        .command = c.PHASON_FEEDER_INFO_RESP,
         .status = c.PHASON_OK,
         .protocol_version = 1,
         .firmware_year = 22,
@@ -241,9 +241,9 @@ test "Phason to/from datagram" {
     try testing.expect(dg.src == 0x42);
     try testing.expect(dg.dst == 0x00);
     try testing.expect(dg.protocol == c.PHASON_PROTOCOL_ID);
-    try testing.expect(std.meta.eql(dg.payload, [_]u8{ c.PHASON_GET_FEEDER_INFO_RESP, c.PHASON_OK, 1, 22, 12, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0, 0, 0, 0 }));
+    try testing.expect(std.meta.eql(dg.payload, [_]u8{ c.PHASON_FEEDER_INFO_RESP, c.PHASON_OK, 1, 22, 12, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0, 0, 0, 0 }));
 
-    var decoded = c.PhasonGetFeederInfoResponse_from_datagram(&dg);
+    var decoded = c.PhasonFeederInfoResponse_from_datagram(&dg);
     try testing.expect(std.meta.eql(resp, decoded));
 }
 

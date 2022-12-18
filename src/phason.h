@@ -96,8 +96,8 @@ inline static struct GravitonDatagram PhasonResponse_to_datagram(uint8_t feeder_
 */
 
 enum PhasonCommands {
-    PHASON_GET_FEEDER_INFO_REQ = 0x01,
-    PHASON_GET_FEEDER_INFO_RESP = 0x81,
+    PHASON_FEEDER_INFO_REQ = 0x01,
+    PHASON_FEEDER_INFO_RESP = 0x81,
     PHASON_RESET_FEEDER_REQ = 0x02,
     PHASON_RESET_FEEDER_RESP = 0x82,
     PHASON_START_FEED_REQ = 0x03,
@@ -108,7 +108,7 @@ enum PhasonCommands {
     PHASON_QUERY_BY_UID_RESP = 0x84,
 };
 
-struct PhasonGetFeederInfoResponse {
+struct PhasonFeederInfoResponse {
     uint8_t command;  // Always 0x81
     uint8_t status;
     uint8_t protocol_version;
@@ -119,8 +119,8 @@ struct PhasonGetFeederInfoResponse {
     uint8_t padding[8];
 } __attribute__((packed));
 
-__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonGetFeederInfoResponse);
-__PHASON_FROM_DATAGRAM(PhasonGetFeederInfoResponse);
+__PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeederInfoResponse);
+__PHASON_FROM_DATAGRAM(PhasonFeederInfoResponse);
 
 struct PhasonStartFeedRequest {
     uint8_t command;  // Always 0x03
@@ -194,7 +194,10 @@ inline static enum GravitonDatagramReadResult phason_send_request(
         return result;                                                                                                 \
     }
 
-__PHASON_SEND_REQUEST(get_feeder_info, PhasonGetFeederInfoResponse);
+__PHASON_SEND_REQUEST(feeder_info, PhasonFeederInfoResponse);
+__PHASON_SEND_REQUEST(reset_feeder, PhasonResponse);
+__PHASON_SEND_REQUEST(start_feed, PhasonStartFeedResponse);
+__PHASON_SEND_REQUEST(feed_status, PhasonFeedStatusResponse);
 
 /* Send a response */
 inline static int32_t
