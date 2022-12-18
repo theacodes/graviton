@@ -243,7 +243,7 @@ test "Phason to/from datagram" {
     try testing.expect(dg.protocol == c.PHASON_PROTOCOL_ID);
     try testing.expect(std.meta.eql(dg.payload, [_]u8{ c.PHASON_GET_FEEDER_INFO_RESP, c.PHASON_OK, 1, 22, 12, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0, 0, 0, 0 }));
 
-    var decoded = c.PhasonGetFeederInfoResponse_from_datagram(&dg).*;
+    var decoded = c.PhasonGetFeederInfoResponse_from_datagram(&dg);
     try testing.expect(std.meta.eql(resp, decoded));
 }
 
@@ -307,7 +307,7 @@ test "Phason send request" {
     try testing.expectEqual(unpack_i32(req_dg.payload[2..6]), 52);
 
     // Check the decoded response data
-    var actual_resp = c.PhasonStartFeedResponse_from_datagram(&actual_resp_dg).*;
+    var actual_resp = c.PhasonStartFeedResponse_from_datagram(&actual_resp_dg);
     try testing.expectEqual(actual_resp.command, c.PHASON_START_FEED_RESP);
     try testing.expectEqual(actual_resp.status, c.PHASON_OK);
     try testing.expectEqual(actual_resp.sequence, 42);
