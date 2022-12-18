@@ -83,8 +83,10 @@ inline static bool GravitonDatagram_check_crc8(struct GravitonDatagram* datagram
 /* Returns a pointer to the datagram's byte representation. */
 inline static uint8_t* GravitonDatagram_as_bytes(struct GravitonDatagram* datagram) { return (uint8_t*)(datagram); }
 
-/* Constructs a datagram from its byte representation. Bytes must be at least 32 bytes long */
-inline static struct GravitonDatagram GravitonDatagram_from_bytes(uint8_t* bytes) {
+/*  Constructs a datagram from its byte representation.
+    bytes* must be at least 32 bytes long, and this function
+    creates a copy of them. */
+inline static struct GravitonDatagram GravitonDatagram_from_bytes(const uint8_t* bytes) {
     struct GravitonDatagram datagram;
     memcpy(GravitonDatagram_as_bytes(&datagram), bytes, GRAVITON_DATAGRAM_SIZE);
     return datagram;

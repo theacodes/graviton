@@ -60,29 +60,33 @@ struct PhasonResponse {
     uint8_t data[24];
 } __attribute__((packed));
 
+/*
+    Helpers for converting requests & responses to and from datagrams.
+*/
+
 __PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonResponse);
 
 #define __PHASON_FROM_DATAGRAM(typename)                                                                               \
-    inline static struct typename typename##_from_datagram(struct GravitonDatagram* datagram) {                        \
-        return *((struct typename*)(datagram->payload));                                                               \
+    inline static struct typename typename##_from_datagram(const struct GravitonDatagram* datagram) {                  \
+        return *((const struct typename*)(datagram->payload));                                                         \
     }
 
 __PHASON_FROM_DATAGRAM(PhasonRequest);
 
-inline static struct GravitonDatagram PhasonRequest_to_datagram(uint8_t feeder_addr, void* req) {
+inline static struct GravitonDatagram PhasonRequest_to_datagram(uint8_t feeder_addr, const void* req) {
     struct GravitonDatagram datagram;
     GravitonDatagram_init(&datagram, PHASON_CONTROLLER_ADDRESS, feeder_addr, PHASON_PROTOCOL_ID);
-    memcpy(datagram.payload, (uint8_t*)(req), GRAVITON_PAYLOAD_SIZE);
+    memcpy(datagram.payload, (const uint8_t*)(req), GRAVITON_PAYLOAD_SIZE);
     GravitonDatagram_set_crc8(&datagram);
     return datagram;
 }
 
 __PHASON_FROM_DATAGRAM(PhasonResponse);
 
-inline static struct GravitonDatagram PhasonResponse_to_datagram(uint8_t feeder_addr, void* resp) {
+inline static struct GravitonDatagram PhasonResponse_to_datagram(uint8_t feeder_addr, const void* resp) {
     struct GravitonDatagram datagram;
     GravitonDatagram_init(&datagram, feeder_addr, PHASON_CONTROLLER_ADDRESS, PHASON_PROTOCOL_ID);
-    memcpy(datagram.payload, (uint8_t*)(resp), GRAVITON_PAYLOAD_SIZE);
+    memcpy(datagram.payload, (const uint8_t*)(resp), GRAVITON_PAYLOAD_SIZE);
     GravitonDatagram_set_crc8(&datagram);
     return datagram;
 }
@@ -170,7 +174,7 @@ __PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonQueryByUIDRequest);
 
 /* Send a request and read a reply */
 inline static enum GravitonDatagramReadResult phason_send_request(
-    struct GravitonIO* io, uint8_t feeder_addr, struct PhasonRequest* req, struct GravitonDatagram* resp) {
+    struct GravitonIO* io, uint8_t feeder_addr, const struct PhasonRequest* req, struct GravitonDatagram* resp) {
     struct GravitonDatagram request_datagram = PhasonRequest_to_datagram(feeder_addr, req);
     if (GravitonDatagram_write_to_stream(&request_datagram, io) < 0) {
         return GRAVITON_READ_REQUEST_FAILED;
@@ -180,7 +184,7 @@ inline static enum GravitonDatagramReadResult phason_send_request(
 
 #define __PHASON_SEND_REQUEST(req_name, resp_typename)                                                                 \
     inline static enum GravitonDatagramReadResult phason_send_##req_name##_request(                                    \
-        struct GravitonIO* io, uint8_t feeder_addr, struct PhasonRequest* req, struct resp_typename* resp) {           \
+        struct GravitonIO* io, uint8_t feeder_addr, const struct PhasonRequest* req, struct resp_typename* resp) {     \
         struct GravitonDatagram resp_dg;                                                                               \
         int32_t result = phason_send_request(io, feeder_addr, req, &resp_dg);                                          \
         if (result != GRAVITON_READ_OK) {                                                                              \
@@ -193,7 +197,8 @@ inline static enum GravitonDatagramReadResult phason_send_request(
 __PHASON_SEND_REQUEST(get_feeder_info, PhasonGetFeederInfoResponse);
 
 /* Send a response */
-inline static int32_t phason_send_response(struct GravitonIO* io, uint8_t feeder_addr, struct PhasonResponse* resp) {
+inline static int32_t
+phason_send_response(struct GravitonIO* io, uint8_t feeder_addr, const struct PhasonResponse* resp) {
     struct GravitonDatagram response_datagram = PhasonResponse_to_datagram(feeder_addr, resp);
     return GravitonDatagram_write_to_stream(&response_datagram, io);
 }
