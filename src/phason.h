@@ -130,6 +130,7 @@ struct PhasonStartFeedRequest {
 } __attribute__((packed));
 
 __PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonStartFeedRequest);
+__PHASON_FROM_DATAGRAM(PhasonStartFeedRequest);
 
 struct PhasonStartFeedResponse {
     uint8_t command;  // Always 0x83
@@ -148,6 +149,7 @@ struct PhasonFeedStatusRequest {
 } __attribute__((packed));
 
 __PHASON_ASSERT_PAYLOAD_SIZE(struct PhasonFeedStatusRequest);
+__PHASON_FROM_DATAGRAM(PhasonFeedStatusRequest);
 
 struct PhasonFeedStatusResponse {
     uint8_t command;  // Always 0x84
@@ -188,10 +190,10 @@ inline static enum GravitonDatagramReadResult phason_send_request(
         struct GravitonDatagram resp_dg;                                                                               \
         int32_t result = phason_send_request(io, feeder_addr, req, &resp_dg);                                          \
         if (result != GRAVITON_READ_OK) {                                                                              \
-            return result;                                                                                             \
+            return (enum GravitonDatagramReadResult)result;                                                            \
         }                                                                                                              \
         (*resp) = resp_typename##_from_datagram(&resp_dg);                                                             \
-        return result;                                                                                                 \
+        return (enum GravitonDatagramReadResult)result;                                                                \
     }
 
 __PHASON_SEND_REQUEST(feeder_info, PhasonFeederInfoResponse);
